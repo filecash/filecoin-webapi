@@ -34,7 +34,8 @@ mime = "*"
 lazy_static = "*"
 libc = "*"
 bytes = "~0.5"
-bellperson = { version = "0.14", default-features = false}
+#bellperson = { version = "0.12", default-features = false }
+bellperson = { path = "../bellperson", default-features = false }
 openssl = "*"
 std-semaphore = "0.1"
 
@@ -49,5 +50,5 @@ default = ["pairing"]
 pairing = ["filecoin-proofs-api/pairing", "bellperson/pairing"]
 blst = ["filecoin-proofs-api/blst", "bellperson/blst"]
 
-#[patch.crates-io]
-#bellperson = { git = "https://github.com/sbwtw/bellperson", branch = "3080" }
+[patch.crates-io]
+bellperson = { git = "https://github.com/sbwtw/bellperson", branch = "3080" }
