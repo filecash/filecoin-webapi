@@ -34,12 +34,14 @@ mime = "*"
 lazy_static = "*"
 libc = "*"
 bytes = "~0.5"
-bellperson = { version = "0.12.3", default-features = false, features = ["gpu"] }
+bellperson = { version = "0.14", default-features = false}
 openssl = "*"
+std-semaphore = "0.1"
 
 [dependencies.filecoin-proofs-api]
 package = "filecoin-proofs-api"
 version = "5.4.1"
+path = "../rust-filecoin-proofs-api/"
 default-features = false
 
 [features]
@@ -47,5 +49,5 @@ default = ["pairing"]
 pairing = ["filecoin-proofs-api/pairing", "bellperson/pairing"]
 blst = ["filecoin-proofs-api/blst", "bellperson/blst"]
 
-[patch.crates-io]
-bellperson = { git = "https://github.com/sbwtw/bellperson", branch = "3080" }
+#[patch.crates-io]
+#bellperson = { git = "https://github.com/sbwtw/bellperson", branch = "3080" }

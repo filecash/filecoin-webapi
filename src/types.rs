@@ -92,3 +92,15 @@ impl WebPublicReplicas {
             .collect()
     }
 }
+
+// fic remotec2 resource info
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct C2worker {
+    pub id: Option<u64>,
+    pub host: Option<String>,
+    pub speed: Option<f32>,
+    pub cpu: Option<f32>,
+    pub gpu: Option<f32>,
+    pub mem: Option<f32>,
+    pub add_time: Option<String>,
+}

@@ -7,7 +7,7 @@ use futures::stream::{StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
 use libc::pthread_cancel;
 use log::*;
-use serde::export::Formatter;
+use serde::__private::Formatter;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fmt;
@@ -18,6 +18,13 @@ use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime};
+
+// fic remotec2
+use std::fs;
+use std::fs::File;
+use std::process::Command;
+use serde::{Deserialize, Serialize};
+use crate::types::*;
 
 lazy_static! {
     static ref WORKER_TOKEN: AtomicU64 = AtomicU64::new(0);
@@ -69,6 +76,10 @@ impl WorkerProp {
 pub struct ServState {
     workers: HashMap<u64, WorkerProp>,
     config: Config,
+    // fic remotec2 resource info
+    cpu_use: f32,
+    gpu_use: f32,
+    mem_use: f32,
 }
 
 impl ServState {
@@ -79,6 +90,10 @@ impl ServState {
         Self {
             workers: HashMap::new(),
             config,
+            // fic remotec2 resource info
+            cpu_use: 0.0,
+            gpu_use: 0.0,
+            mem_use: 0.0,
         }
     }
 
@@ -106,6 +121,11 @@ impl ServState {
         let limit = self.job_limit(name.as_ref());
 
         num < limit
+    }
+
+    // fic remotec2
+    pub fn workers_num(&mut self) -> usize {
+       self.workers.len()
     }
 
     pub fn enqueue(&mut self, prop: WorkerProp) -> PollingState {
@@ -249,4 +269,54 @@ pub async fn upload_test() -> HttpResponse {
 	    </html>"#;
 
     HttpResponse::Ok().body(html)
+}
+
+// fic remotec2 resource info
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct ResInfo{
+    cpu: f32,
+    gpu: f32,
+    mem: f32,
+}
+
+pub async fn get_worker_info(state: Data<Arc<Mutex<ServState>>>) -> HttpResponse {
+    let cpu = state.lock().unwrap().cpu_use;
+    let gpu = state.lock().unwrap().gpu_use;
+    let mem = state.lock().unwrap().mem_use;
+
+    thread::spawn(move || {
+        let shell = r#"#!/bin/bash
+cpu=`sar -u 1 1 | sed -n -e '4p' | awk '{print $4}'`
+mem=`free -h | sed -n -e '2p' | awk '{print $3/$2*100}'`
+a=0
+b=0
+for i in `nvidia-smi | sed -n -e '/Default/p' | awk '{print $13*1}'`
+do
+        a=$(($a+$i))
+        b=$(($b+100))
+done
+gpu=`echo $a $b | awk '{print $1/$2*100}' `
+echo "{\"cpu\":$cpu,\"mem\":$mem,\"gpu\":$gpu}"
+"#;
+        let file = File::open("resource.sh");
+        if file.is_err() {
+            let _ret = fs::write("resource.sh", shell);
+        }
+
+        let output = Command::new("bash").arg("resource.sh").output().expect("Failed to execute command");
+        let res: ResInfo = serde_json::from_slice(&output.stdout.as_slice().to_vec()).map_err(|e| format!("{:?}", e)).unwrap();
+        state.lock().unwrap().cpu_use = res.cpu;
+        state.lock().unwrap().gpu_use = res.gpu;
+        state.lock().unwrap().mem_use = res.mem;
+    });
+
+    HttpResponse::Ok().json(json!(C2worker{
+        id: None,
+        host: None,
+        speed: None,
+        cpu: Some(cpu),
+        gpu: Some(gpu),
+        mem: Some(mem),
+        add_time: None,
+    }))
 }

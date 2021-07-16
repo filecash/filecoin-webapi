@@ -16,6 +16,21 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
 
+// fic remotec2
+use lazy_static::lazy_static;
+use std_semaphore::Semaphore;
+lazy_static! {
+    static ref C2_TASK_SEM: Semaphore = create_task_semaphore();
+}
+fn create_task_semaphore() -> Semaphore {
+    let c2_num_str = std::env::var("FIC_C2_TASK_NUM").unwrap();
+    let mut c2_num = c2_num_str.parse::<isize>().unwrap();
+    if c2_num == 0 {
+        c2_num = 1;
+    }
+    Semaphore::new(c2_num)
+}
+
 pub async fn clear_cache(_req: HttpRequest, data: Json<ClearCacheData>) -> HttpResponse {
     trace!("clear_cache");
 
@@ -90,41 +105,58 @@ pub async fn seal_commit_phase1(state: Data<Arc<Mutex<ServState>>>, data: Json<S
     HttpResponse::Ok().json(response)
 }
 
+// fic remotec2
 pub async fn seal_commit_phase2(
     state: Data<Arc<Mutex<ServState>>>,
     mut payload: Payload,
 ) -> Result<HttpResponse, Error> {
+    let mut bytes = BytesMut::new();
+    while let Some(item) = payload.next().await {
+        match item {
+            Ok(i) => {
+                bytes.extend_from_slice(&i);
+            },
+            Err(e) => {
+                warn!("item err {:?}:", e);
+                return Err(Error::from(e));
+            }
+        }
+    }
+        
     if !state.lock().unwrap().job_available("C2") {
         return Ok(HttpResponse::TooManyRequests().finish());
     }
 
-    let mut bytes = BytesMut::new();
-    while let Some(item) = payload.next().await {
-        bytes.extend_from_slice(&item?);
-    }
-
     let data_len = bytes.len();
-    let data: SealCommitPhase2Data = serde_json::from_slice(bytes.as_ref())?;
-    debug!("seal_commit_phase2, data len: {}", data_len);
+    let data = serde_json::from_slice::<SealCommitPhase2Data>(bytes.as_ref());
+    match data {
+        Ok(d) => {
+            debug!("seal_commit_phase2, data len: {}", data_len);
+            let (tx, rx) = channel();
+            let handle: JoinHandle<()> = thread::spawn(move || {
+                let _guard = C2_TASK_SEM.access();
+                let start = Instant::now();
+                let r = seal::seal_commit_phase2(d.phase1_output.clone(), d.prover_id, d.sector_id);
 
-    let (tx, rx) = channel();
-    let handle: JoinHandle<()> = thread::spawn(move || {
-        let start = Instant::now();
-        let r = seal::seal_commit_phase2(data.phase1_output.clone(), data.prover_id, data.sector_id);
+                debug!("seal_commit_phase2 finished in {} secs", start.elapsed().as_secs());
+                if !r.is_ok() {
+                    warn!("seal_commit_phase2 calc error: {:?}", r);
+                }
 
-        debug!("seal_commit_phase2 finished in {} secs", start.elapsed().as_secs());
-        if !r.is_ok() {
-            warn!("seal_commit_phase2 calc error: {:?}", r);
+                if let Err(e) = tx.send(json!(r.map_err(|e| format!("{:?}", e)))) {
+                    error!("seal_commit_phase2 send error: {:?}", e);
+                }
+            });
+
+            let prop = WorkerProp::new("C2".to_string(), handle, rx);
+            let response = state.lock().unwrap().enqueue(prop);
+            Ok(HttpResponse::Ok().json(response))
+        },
+        Err(e) => {
+            warn!("json err: {:?}", e);
+            Err(Error::from(e))                
         }
-
-        if let Err(e) = tx.send(json!(r.map_err(|e| format!("{:?}", e)))) {
-            error!("seal_commit_phase2 send error: {:?}", e);
-        }
-    });
-
-    let prop = WorkerProp::new("C2".to_string(), handle, rx);
-    let response = state.lock().unwrap().enqueue(prop);
-    Ok(HttpResponse::Ok().json(response))
+    }
 }
 
 pub async fn verify_seal(data: Json<VerifySealData>) -> HttpResponse {

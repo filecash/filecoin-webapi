@@ -38,7 +38,7 @@ fn json_error_handler(err: error::JsonPayloadError, _req: &HttpRequest) -> error
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
-    let m = clap::App::new("Filecoin-webapi")
+    let m = clap::App::new("filecoin-webapi")
         .author("sbw <sbw@sbw.so>")
         .version("2.0.0")
         .about("filecoin webapi")
@@ -104,6 +104,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/sys/remove_job").route(web::post().to(system::remove_job)))
             .service(web::resource("/sys/upload_file").route(web::post().to(system::upload_file)))
             .service(web::resource("/sys/upload_test").route(web::get().to(system::upload_test)))
+            .service(web::resource("/sys/get_worker_info").route(web::get().to(system::get_worker_info)))
             .service(
                 web::resource("/post/generate_winning_post_sector_challenge")
                     .route(web::post().to(post::generate_winning_post_sector_challenge)),
