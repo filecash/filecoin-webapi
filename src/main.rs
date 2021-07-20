@@ -136,7 +136,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/seal/add_piece").route(web::post().to(seal::add_piece)))
             .service(web::resource("/seal/write_and_preprocess").route(web::post().to(seal::write_and_preprocess)))
     });
-
+    
     let server = if let Some(cert) = private_cert {
         warn!("use private-cert file {}", cert);
 
@@ -147,10 +147,10 @@ async fn main() -> std::io::Result<()> {
             builder.set_certificate_chain_file(chain).unwrap();
         }
 
-        server.bind_openssl(bind_addr, builder)
+        server.bind(bind_addr)
     } else {
         server.bind(bind_addr)
     };
-
+    
     server?.workers(1).run().await
 }
