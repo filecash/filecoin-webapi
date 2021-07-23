@@ -23,11 +23,16 @@ lazy_static! {
     static ref C2_TASK_SEM: Semaphore = create_task_semaphore();
 }
 fn create_task_semaphore() -> Semaphore {
-    let c2_num_str = std::env::var("FIC_C2_TASK_NUM").unwrap();
-    let mut c2_num = c2_num_str.parse::<isize>().unwrap();
-    if c2_num == 0 {
-        c2_num = 1;
-    }
+    let c2_num = match std::env::var("FIC_C2_TASK_NUM") {
+        Ok(c2_num_str) => {
+            let mut c2 = c2_num_str.parse::<isize>().unwrap();
+            if c2 == 0 {
+                c2 = 1
+            }
+            c2
+        }
+        Err(_) => "10".parse::<isize>().unwrap(),
+    };
     Semaphore::new(c2_num)
 }
 
