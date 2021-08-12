@@ -1,5 +1,5 @@
 ---
-listen_addr: "192.168.12.200:6000"
+listen_addr: "0.0.0.0:6000"
 #private_cert: "/etc/webapi-key.pem"
 #cert_chain: "/etc/webapi-cert.pem"
 job_limits: {}
